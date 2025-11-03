@@ -1,6 +1,9 @@
 # Environment Variables
 .env
 
+# Google Cloud Service Account Keys
+*.json
+
 # Dependencies
 node_modules/
 
