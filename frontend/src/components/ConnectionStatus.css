@@ -1,0 +1,49 @@
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.connection-status.checking {
+  color: #fbbf24;
+}
+
+.connection-status.connected {
+  color: #10b981;
+}
+
+.connection-status.disconnected {
+  color: #ef4444;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.connection-status.checking .status-dot {
+  background-color: #fbbf24;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.connection-status.connected .status-dot {
+  background-color: #10b981;
+}
+
+.connection-status.disconnected .status-dot {
+  background-color: #ef4444;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
