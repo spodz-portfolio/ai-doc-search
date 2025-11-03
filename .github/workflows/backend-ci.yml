@@ -91,7 +91,7 @@ jobs:
 
       - name: 📊 Upload test coverage
         if: matrix.node-version == 18
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           directory: ./backend
           flags: backend
