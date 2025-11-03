@@ -1,0 +1,47 @@
+# Ignore test coverage files
+coverage/
+*.lcov
+.nyc_output/
+
+# Ignore build artifacts
+dist/
+build/
+
+# Ignore logs
+*.log
+logs/
+
+# Ignore environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore dependency directories
+node_modules/
+
+# Ignore package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Ignore temporary files
+.tmp/
+temp/
+
+# Ignore Docker files
+.dockerignore
+
+# Ignore GitHub Actions artifacts
+.github/workflows/*.log
