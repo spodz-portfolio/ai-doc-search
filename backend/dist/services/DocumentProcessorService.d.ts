@@ -12,6 +12,7 @@ interface DocumentChunk {
     id: string;
     text: string;
     content: string;
+    documentId: string;
     metadata: {
         documentId: string;
         documentTitle: string;
@@ -37,6 +38,10 @@ export declare class DocumentProcessorService extends BaseService {
     private defaultOverlap;
     constructor(ragRepository?: RagRepository);
     /**
+     * Calculate optimal chunk size based on document characteristics
+     */
+    private calculateOptimalChunkSize;
+    /**
      * Split text into chunks with overlap for better context preservation
      */
     splitTextIntoChunks(text: string, chunkSize?: number, overlap?: number): string[];
@@ -53,9 +58,13 @@ export declare class DocumentProcessorService extends BaseService {
      */
     processDocument(document: Document, chunkSize?: number, overlap?: number): Promise<DocumentChunk[]>;
     /**
-     * Process multiple documents into chunks
+     * Process multiple documents into chunks with parallel processing
      */
     processDocuments(documents: Document[], chunkSize?: number, overlap?: number): Promise<DocumentChunk[]>;
+    /**
+     * Process documents with controlled concurrency
+     */
+    private processDocumentsWithConcurrency;
     /**
      * Extract key phrases from text for better retrieval
      */

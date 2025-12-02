@@ -1,4 +1,4 @@
-import { IMessage, IRagMessage, ISource, IChatOptions } from './interfaces';
+import { IMessage, IRagMessage, ISource } from './interfaces';
 
 export class Message implements IMessage {
   constructor(
@@ -63,24 +63,4 @@ export class RagMessage extends Message implements IRagMessage {
   }
 }
 
-export class ChatOptions implements IChatOptions {
-  constructor(
-    public enableStreaming: boolean = true,
-    public maxTokens: number = 1000,
-    public temperature: number = 0.7,
-    public searchMode: 'openai' | 'rag' = 'openai',
-    public systemPrompt?: string
-  ) {}
-
-  static default(): ChatOptions {
-    return new ChatOptions();
-  }
-
-  isRagMode(): boolean {
-    return this.searchMode === 'rag';
-  }
-
-  isStreamingEnabled(): boolean {
-    return this.enableStreaming && !this.isRagMode();
-  }
-}
+// ChatOptions removed - only RAG search is supported now

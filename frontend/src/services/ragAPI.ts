@@ -1,4 +1,3 @@
-import { ChatRequest, ChatResponse } from '../types/chat';
 import { IRagService } from '../types/interfaces';
 import { BaseAPIService } from './baseAPIService';
 
@@ -10,6 +9,7 @@ export interface RagRequest {
   maxContextLength?: number;
   temperature?: number;
   maxTokens?: number;
+  category?: string; // Filter by document category
 }
 
 export interface RagResponse {
@@ -17,6 +17,7 @@ export interface RagResponse {
   message?: string;
   data?: {
     answer?: string;
+    message?: string;
     sources?: Array<{
       documentId: string;
       documentTitle: string;
@@ -334,6 +335,47 @@ class RagAPI extends BaseAPIService implements IRagService {
       return await response.json();
     } catch (error) {
       console.error('Error uploading documents:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload documents from files with metadata
+   */
+  async uploadDocumentsWithMetadata(files: FileList, metadata: Record<string, any> = {}): Promise<DocumentLoadResponse> {
+    try {
+      const formData = new FormData();
+      
+      // Add all files to FormData
+      for (let i = 0; i < files.length; i++) {
+        formData.append('documents', files[i]);
+      }
+
+      // Add metadata fields
+      Object.keys(metadata).forEach(key => {
+        if (metadata[key] !== undefined && metadata[key] !== null && metadata[key] !== '') {
+          formData.append(key, metadata[key].toString());
+        }
+      });
+
+      const response = await fetch(`${this.baseUrl}/api/rag/load/upload`, {
+        method: 'POST',
+        body: formData, // Don't set Content-Type header, let browser set it
+      });
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        try {
+          const errorData = JSON.parse(responseText);
+          throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        } catch {
+          throw new Error(`HTTP error! status: ${response.status}. Response: ${responseText.substring(0, 200)}...`);
+        }
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error uploading documents with metadata:', error);
       throw error;
     }
   }

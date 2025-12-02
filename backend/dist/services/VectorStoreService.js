@@ -158,8 +158,15 @@ export class VectorStoreService extends BaseService {
                 if (results.length === 0) {
                     console.log(`🔍 Debugging: Trying to search with no threshold to see if ANY vectors exist...`);
                     try {
-                        const anyResults = await this.repository.searchVectors(queryEmbedding, 1, 0.0);
+                        const anyResults = await this.repository.searchVectors(queryEmbedding, 5, 0.0);
                         console.log(`🔍 Found ${anyResults.length} vectors with 0.0 threshold`);
+                        if (anyResults.length > 0) {
+                            console.log(`🔍 Top similarities found:`, anyResults.map(r => ({
+                                similarity: r.similarity,
+                                text: r.text.substring(0, 100)
+                            })));
+                            console.log(`❌ None met the threshold of ${minSimilarity} - consider lowering the threshold`);
+                        }
                     }
                     catch (debugError) {
                         console.log(`❌ Debug search failed:`, debugError.message);
@@ -219,6 +226,12 @@ export class VectorStoreService extends BaseService {
                 const minSize = filters.minChunkSize;
                 filteredResults = filteredResults.filter(chunk => chunk.metadata &&
                     chunk.metadata.chunkSize >= minSize);
+            }
+            if (filters.category) {
+                const category = filters.category;
+                filteredResults = filteredResults.filter(chunk => chunk.metadata &&
+                    chunk.metadata.category &&
+                    chunk.metadata.category.toLowerCase() === category.toLowerCase());
             }
             return filteredResults.slice(0, topK);
         }

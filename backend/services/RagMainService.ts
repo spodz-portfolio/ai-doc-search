@@ -2,7 +2,7 @@ import { BaseService } from '../utils/BaseService.js';
 // import { GoogleDriveService } from './GoogleDriveService.js';
 import { DocumentProcessorService } from './DocumentProcessorService.js';
 import { VectorStoreService } from './VectorStoreService.js';
-import { ChatService } from './ChatService.js';
+import { ChatService } from './ChatService';
 import type { RagRepository } from '../repositories/RagRepository.js';
 
 interface LoadDocumentsOptions {
@@ -16,6 +16,7 @@ interface QueryOptions {
   minSimilarity?: number;
   includeContext?: boolean;
   maxContextLength?: number;
+  category?: string;
 }
 
 interface RagResult {
@@ -136,16 +137,29 @@ export class RagService extends BaseService {
         return { success: false, message: 'No content found in documents', documents: [] };
       }
 
-      // Add chunks to vector store
+      // Add chunks to vector store in batches for better performance
+      console.log(`🔗 Adding ${chunks.length} chunks to vector store...`);
+      const vectorStartTime = Date.now();
+      
       const vectorChunks = chunks.map(chunk => ({
         ...chunk,
         documentId: chunk.metadata.documentId,
         createdAt: new Date()
       }));
-      await this.vectorStoreService.addChunks(vectorChunks);
+      
+      // Process chunks in batches to avoid memory issues
+      const batchSize = 50;
+      for (let i = 0; i < vectorChunks.length; i += batchSize) {
+        const batch = vectorChunks.slice(i, i + batchSize);
+        await this.vectorStoreService.addChunks(batch);
+        console.log(`📊 Processed vector batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(vectorChunks.length / batchSize)}`);
+      }
+      
+      const vectorTime = Date.now() - vectorStartTime;
+      console.log(`✅ Vector store operations completed in ${vectorTime}ms`);
 
-      // Store document metadata
-      for (const doc of documents) {
+      // Store document metadata in parallel
+      const metadataPromises = documents.map(async (doc) => {
         this.loadedDocuments.set(doc.id, {
           ...doc,
           chunksCount: chunks.filter(c => c.metadata.documentId === doc.id).length,
@@ -160,7 +174,10 @@ export class RagService extends BaseService {
             source: doc.source
           });
         }
-      }
+      });
+
+      await Promise.all(metadataPromises);
+      console.log(`💾 Document metadata saved for ${documents.length} documents`);
 
       console.log(`✅ Successfully loaded ${documents.length} documents with ${chunks.length} chunks`);
       
@@ -183,10 +200,20 @@ export class RagService extends BaseService {
     try {
       const {
         topK = 5,
-        minSimilarity = 0.7,
+        minSimilarity = 0.15, // Threshold for actually relevant content (lowered for better recall)
         includeContext = true,
-        maxContextLength = 4000
+        maxContextLength = 4000,
+        category
       } = options;
+
+      console.log(`🔍 RAG Service query options:`, { 
+        topK, 
+        minSimilarity, 
+        includeContext, 
+        maxContextLength,
+        category,
+        receivedOptions: options 
+      });
 
       // Auto-initialize RAG system if not already initialized
       if (!this.isInitialized) {
@@ -194,76 +221,156 @@ export class RagService extends BaseService {
         await this.initialize();
       }
 
-      console.log(`🔍 Querying RAG system: "${question}"`);
+      console.log(`🔍 Querying RAG system: "${question}"${category ? ` (Category: ${category})` : ''}`);
 
-      // Search for relevant chunks
-      const relevantChunks = await this.vectorStoreService.similaritySearch(
-        question,
-        topK,
-        minSimilarity
-      );
-
-      if (relevantChunks.length === 0) {
-        console.log('❌ No relevant documents found');
-        return {
-          success: false,
-          message: 'No relevant information found for your query',
-          sources: []
-        };
+      // Search for relevant chunks - use filtered search if category is provided
+      let relevantChunks: any[] = [];
+      if (category) {
+        console.log(`🏷️ Using category filter: ${category}`);
+        relevantChunks = await this.vectorStoreService.searchWithFilter(
+          question,
+          topK,
+          { category },
+          minSimilarity
+        );
+      } else {
+        relevantChunks = await this.vectorStoreService.similaritySearch(
+          question,
+          topK,
+          minSimilarity
+        );
       }
 
-      console.log(`📚 Found ${relevantChunks.length} relevant chunks`);
+      // If no chunks meet the threshold, get the best available ones anyway
+      let fallbackChunks: any[] = [];
+      if (relevantChunks.length === 0) {
+        console.log('❌ No chunks above similarity threshold, fetching best available...');
+        if (category) {
+          // Use filtered fallback search
+          fallbackChunks = await this.vectorStoreService.searchWithFilter(
+            question,
+            Math.min(topK, 3),
+            { category },
+            0.0 // No threshold - get the best available
+          );
+        } else {
+          fallbackChunks = await this.vectorStoreService.similaritySearch(
+            question,
+            Math.min(topK, 3), // Limit fallback to 3 chunks
+            0.0 // No threshold - get the best available
+          );
+        }
+        console.log(`📋 Fallback: Found ${fallbackChunks.length} chunks with any similarity`);
+      }
 
-      // Build context from relevant chunks
+      const chunksToProcess = relevantChunks.length > 0 ? relevantChunks : fallbackChunks;
+      const hasGoodMatches = relevantChunks.length > 0;
+
+      console.log(`📚 Processing ${chunksToProcess.length} chunks (${hasGoodMatches ? 'good matches' : 'fallback results'})`);
+      console.log(`🎯 hasGoodMatches: ${hasGoodMatches}, relevantChunks: ${relevantChunks.length}, fallbackChunks: ${fallbackChunks.length}`);
+
+      // Debug: Log chunk structure and similarities
+      if (chunksToProcess.length > 0) {
+        console.log('🔍 Chunk similarities:', chunksToProcess.map((chunk, i) => `#${i}: ${chunk.similarity?.toFixed(3) || 'N/A'}`).join(', '));
+        console.log('🔍 Sample chunk structure:', {
+          chunkKeys: Object.keys(chunksToProcess[0]),
+          hasDocumentId: !!chunksToProcess[0].documentId,
+          hasChunkId: !!chunksToProcess[0].chunkId,
+          hasText: !!chunksToProcess[0].text,
+          hasSimilarity: !!chunksToProcess[0].similarity
+        });
+      }
+
+      // Build context from available chunks
       let context = '';
       const sources: any[] = [];
 
-      for (const chunk of relevantChunks) {
+      for (const chunk of chunksToProcess) {
+        console.log(`🔧 Processing chunk: ${chunk.chunkId || 'NO_CHUNK_ID'}, docId: ${chunk.documentId || 'NO_DOC_ID'}, textLength: ${chunk.text?.length || 0}, similarity: ${chunk.similarity}`);
+        
         if (context.length + chunk.text.length <= maxContextLength) {
           context += `${chunk.text}\n\n`;
-          sources.push({
-            documentId: chunk.documentId,
-            chunkId: chunk.chunkId,
-            similarity: chunk.similarity,
-            text: chunk.text.substring(0, 200) + '...',
-            metadata: chunk.metadata || {}
-          });
+          
+          // Only add to sources if this is actually a good match (not fallback)
+          if (hasGoodMatches) {
+            sources.push({
+              documentId: chunk.documentId,
+              documentTitle: chunk.metadata?.documentTitle || 'Unknown Document',
+              chunkIndex: chunk.metadata?.chunkIndex || 0,
+              similarity: chunk.similarity,
+              webViewLink: chunk.metadata?.webViewLink || null,
+              preview: chunk.text.substring(0, 200) + (chunk.text.length > 200 ? '...' : '')
+            });
+            console.log(`✅ Added source: docId=${chunk.documentId}, similarity=${chunk.similarity}`);
+          } else {
+            console.log(`⚠️ Chunk used for context only (fallback), not added as source`);
+          }
+        } else {
+          console.log(`⚠️ Skipped chunk due to context length limit`);
         }
       }
+
+      console.log(`📊 Final sources count: ${sources.length}, context length: ${context.length}`);
 
       if (!includeContext) {
         // Just return the sources without generating an answer
         return {
-          success: true,
-          message: `Found ${relevantChunks.length} relevant sources`,
-          sources,
+          success: hasGoodMatches,
+          message: hasGoodMatches 
+            ? `Found ${sources.length} relevant sources`
+            : `No relevant content found for your query.`,
+          sources, // Will be empty if no good matches
           context
         };
       }
 
-      // Generate response using chat service with context
-      const systemPrompt = `You are a helpful AI assistant. Use the following context to answer the user's question. If the context doesn't contain enough information to answer the question, say so clearly.
+      // Only generate AI answer when we have good matches
+      let answer: string | undefined = undefined;
+      
+      if (hasGoodMatches) {
+        const systemPrompt = `You are a helpful AI assistant. Use the following context to answer the user's question. If the context doesn't contain enough information to answer the question, say so clearly.
 
 Context:
 ${context}
 
 Please provide a comprehensive answer based on the context above.`;
 
-      const answer = await this.chatService.generateResponse(
-        question,
-        [],
-        { systemPrompt }
-      );
+        answer = await this.chatService.generateResponse(
+          question,
+          [],
+          { systemPrompt }
+        );
+        
+        console.log('✅ Generated RAG response');
+      } else {
+        console.log('⚠️ No AI response generated - no relevant content found');
+      }
 
-      console.log('✅ Generated RAG response');
-
-      return {
-        success: true,
-        message: 'Query completed successfully',
-        answer,
-        sources,
+      const finalResponse = {
+        success: hasGoodMatches,
+        message: hasGoodMatches 
+          ? 'Query completed successfully'
+          : 'No relevant content found in your documents',
+        answer, // Will be undefined if no good matches
+        sources, // Will be empty array if no good matches
+        retrievedChunks: sources.length,
         context: includeContext ? context : undefined
       };
+
+      console.log('🚀 Final RAG response being returned:', {
+        success: finalResponse.success,
+        sourcesCount: finalResponse.sources.length,
+        hasAnswer: !!finalResponse.answer,
+        hasContext: !!finalResponse.context,
+        sourcesPreview: finalResponse.sources.slice(0, 2).map(s => ({
+          docId: s.documentId,
+          documentTitle: s.documentTitle,
+          similarity: s.similarity,
+          preview: s.preview.substring(0, 50) + '...'
+        }))
+      });
+
+      return finalResponse;
 
     } catch (error) {
       console.error('❌ Error in RAG query:', error);

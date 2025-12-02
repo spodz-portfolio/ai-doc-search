@@ -22,6 +22,19 @@ const Message: React.FC<MessageProps> = ({ message }) => {
 
   const ragMessage = isRagMessage(message) ? message : null;
 
+  // Debug: Log message structure
+  React.useEffect(() => {
+    if (ragMessage) {
+      console.log('📄 Message component received RAG message:', {
+        role: ragMessage.role,
+        hasSource: !!ragMessage.sources,
+        sourcesLength: ragMessage.sources?.length || 0,
+        retrievedChunks: ragMessage.retrievedChunks,
+        sourcesPreview: ragMessage.sources?.slice(0, 2)
+      });
+    }
+  }, [ragMessage]);
+
   return (
     <div className={`message ${message.role}`}>
       <div className="message-content">
@@ -53,6 +66,13 @@ const Message: React.FC<MessageProps> = ({ message }) => {
               {message.content.split('\n').map((line, index) => (
                 <p key={index}>{line}</p>
               ))}
+              
+              {(() => {
+                console.log('🔍 Message component - ragMessage:', ragMessage);
+                console.log('🔍 Message component - sources:', ragMessage?.sources);
+                console.log('🔍 Message component - sources length:', ragMessage?.sources?.length);
+                return null;
+              })()}
               
               {ragMessage && ragMessage.sources && ragMessage.sources.length > 0 && (
                 <div className="rag-sources">

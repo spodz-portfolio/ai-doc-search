@@ -1,12 +1,10 @@
 import React, { createContext, useContext, ReactNode } from 'react';
-import { IChatService, IRagService, IMessageService, IUIService } from '../types/interfaces';
-import { chatAPI } from '../services/chatAPI';
+import { IRagService, IMessageService, IUIService } from '../types/interfaces';
 import { ragAPI } from '../services/ragAPI';
 import { MessageService } from '../services/messageService';
 import { UIService } from '../services/uiService';
 
 interface ServiceContextType {
-  chatService: IChatService;
   ragService: IRagService;
   messageService: IMessageService;
   uiService: IUIService;
@@ -16,7 +14,6 @@ const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
 interface ServiceProviderProps {
   children: ReactNode;
-  chatService?: IChatService;
   ragService?: IRagService;
   messageService?: IMessageService;
   uiService?: IUIService;
@@ -24,13 +21,11 @@ interface ServiceProviderProps {
 
 export const ServiceProvider: React.FC<ServiceProviderProps> = ({
   children,
-  chatService = chatAPI,
   ragService = ragAPI,
   messageService = new MessageService(),
   uiService = new UIService(),
 }) => {
   const services: ServiceContextType = {
-    chatService,
     ragService,
     messageService,
     uiService,

@@ -135,11 +135,17 @@ export class RagRepository extends BaseRepository<Document> {
   /**
    * Search vectors by similarity (simplified implementation)
    */
-  async searchVectors(queryEmbedding: number[], topK: number = 5, minSimilarity: number = 0.7): Promise<SearchResult[]> {
+  async searchVectors(queryEmbedding: number[], topK: number = 5, minSimilarity: number = 0.1): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
+    const allSimilarities: number[] = [];
+
+    console.log(`🔍 Searching ${this.vectors.size} vectors with minSimilarity: ${minSimilarity}`);
 
     for (const [chunkId, vectorData] of this.vectors.entries()) {
       const similarity = this.calculateCosineSimilarity(queryEmbedding, vectorData.embedding);
+      allSimilarities.push(similarity);
+      
+      console.log(`📊 Chunk ${chunkId.substring(0, 8)}: similarity = ${similarity.toFixed(4)} (text preview: "${vectorData.text.substring(0, 50)}...")`);
       
       if (similarity >= minSimilarity) {
         results.push({
@@ -149,10 +155,16 @@ export class RagRepository extends BaseRepository<Document> {
       }
     }
 
+    console.log(`📊 Similarity stats: min=${Math.min(...allSimilarities).toFixed(4)}, max=${Math.max(...allSimilarities).toFixed(4)}, avg=${(allSimilarities.reduce((a,b) => a+b, 0) / allSimilarities.length).toFixed(4)}`);
+    console.log(`✅ Found ${results.length} chunks above threshold ${minSimilarity}`);
+
     // Sort by similarity (descending) and return top K
-    return results
+    const finalResults = results
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, topK);
+      
+    console.log(`🎯 Returning top ${finalResults.length} results`);
+    return finalResults;
   }
 
   /**

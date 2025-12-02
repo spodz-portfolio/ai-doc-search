@@ -43,9 +43,13 @@ export declare class FileUploadService extends BaseService {
      */
     processUploadedFile(file: UploadedFile): Promise<ProcessedDocument>;
     /**
-     * Process multiple uploaded files
+     * Process multiple uploaded files with controlled concurrency
      */
     processUploadedFiles(files: UploadedFile[]): Promise<ProcessedDocument[]>;
+    /**
+     * Process files with controlled concurrency to avoid overwhelming the system
+     */
+    private processFilesWithConcurrency;
     /**
      * Get supported file formats
      */

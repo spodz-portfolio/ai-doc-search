@@ -1,0 +1,139 @@
+.container {
+  padding: 20px;
+  background-color: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 16px;
+}
+
+.status {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background-color: #f3f4f6;
+  border-radius: 6px;
+}
+
+.statusItem {
+  font-size: 14px;
+  color: #374151;
+}
+
+.section {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.fileInput {
+  width: 100%;
+  padding: 12px;
+  border: 2px dashed #d1d5db;
+  border-radius: 6px;
+  background-color: #f9fafb;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  margin-bottom: 12px;
+}
+
+.fileInput:hover {
+  border-color: #3b82f6;
+}
+
+.selectedFiles {
+  margin-bottom: 12px;
+  padding: 12px;
+  background-color: #eff6ff;
+  border-radius: 6px;
+  border: 1px solid #bfdbfe;
+}
+
+.selectedFiles p {
+  font-weight: 500;
+  color: #1e40af;
+  margin-bottom: 8px;
+}
+
+.fileList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.fileItem {
+  font-size: 14px;
+  color: #374151;
+  padding: 4px 0;
+  border-bottom: 1px solid #e0e7ff;
+}
+
+.fileItem:last-child {
+  border-bottom: none;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 12px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.uploadButton {
+  width: 100%;
+}
+
+.loadButton {
+  width: 100%;
+}
+
+.uploadStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: #f3f4f6;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  margin-top: 16px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+  
+  .status {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Message, RagMessage, ChatOptions } from '../types/models';
-import { IChatService, IRagService, IMessageService } from '../types/interfaces';
+import { Message, RagMessage } from '../types/models';
+import { IRagService, IMessageService } from '../types/interfaces';
 
 export const useMessages = (messageService: IMessageService) => {
   const [messages, setMessages] = useState<Message[]>([]);

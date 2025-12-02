@@ -2,15 +2,7 @@ import { render, RenderOptions } from '@testing-library/react';
 import React, { ReactElement } from 'react';
 import { ServiceProvider } from '../../contexts/ServiceContext';
 
-// Mock services for testing
-export const mockChatService = {
-  sendMessage: jest.fn(),
-  sendMessageStream: jest.fn(),
-  healthCheck: jest.fn(),
-  getModels: jest.fn(),
-  generalHealthCheck: jest.fn(),
-};
-
+// Mock services for testing - chatService removed, only RAG functionality
 export const mockRagService = {
   queryDocuments: jest.fn(),
   getStatus: jest.fn(),
@@ -52,7 +44,6 @@ export const renderWithProviders = (
       return React.createElement(
         ServiceProvider,
         {
-          chatService: mockChatService as any,
           ragService: mockRagService as any,
           messageService: mockMessageService as any,
           uiService: mockUIService as any,
@@ -121,8 +112,7 @@ export const mockFetch = (response: any, ok: boolean = true) => {
 // Reset all mocks
 export const resetAllMocks = () => {
   jest.clearAllMocks();
-  Object.values(mockChatService).forEach(mock => mock.mockReset());
-  Object.values(mockRagService).forEach(mock => mock.mockReset());
-  Object.values(mockMessageService).forEach(mock => mock.mockReset());
-  Object.values(mockUIService).forEach(mock => mock.mockReset());
+  Object.values(mockRagService).forEach(mock => (mock as jest.Mock).mockReset());
+  Object.values(mockMessageService).forEach(mock => (mock as jest.Mock).mockReset());
+  Object.values(mockUIService).forEach(mock => (mock as jest.Mock).mockReset());
 };

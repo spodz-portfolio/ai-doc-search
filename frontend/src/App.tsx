@@ -1,15 +1,22 @@
 import React from 'react';
-import Chat from './components/Chat';
+import { Provider } from 'react-redux';
+import { store } from './app/store/store';
 import { ServiceProvider } from './contexts/ServiceContext';
+import { ErrorBoundary } from './shared/components/feedback/ErrorBoundary';
+import Chat from './features/chat/components/chat';
 import './App.css';
 
 function App() {
   return (
-    <ServiceProvider>
-      <div className="App">
-        <Chat />
-      </div>
-    </ServiceProvider>
+    <Provider store={store}>
+      <ServiceProvider>
+        <div className="App">
+          <ErrorBoundary>
+            <Chat />
+          </ErrorBoundary>
+        </div>
+      </ServiceProvider>
+    </Provider>
   );
 }
 

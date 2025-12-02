@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from './config/config.js';
-import chatRoutes from './routes/chatRoutes.js';
 import ragRoutes from './routes/ragRoutes.js';
 
 const app: Application = express();
@@ -33,7 +32,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api', chatRoutes);
 app.use('/api/rag', ragRoutes);
 
 // Health check endpoint
@@ -48,11 +46,9 @@ app.get('/health', (req: Request, res: Response) => {
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
   res.json({ 
-    message: 'AI Chatbot API', 
+    message: 'AI Document Search API', 
     version: '1.0.0',
     endpoints: {
-      chat: '/api/chat',
-      chatStream: '/api/chat/stream',
       rag: '/api/rag',
       health: '/health'
     }
@@ -80,9 +76,8 @@ app.use('*', (req: Request, res: Response) => {
 
 // Start server
 app.listen(config.server.port, () => {
-  console.log(`🚀 AI Chatbot API server running on port ${config.server.port}`);
+  console.log(`🚀 AI Document Search API server running on port ${config.server.port}`);
   console.log(`📍 Health check: http://localhost:${config.server.port}/health`);
-  console.log(`💬 Chat endpoint: http://localhost:${config.server.port}/api/chat`);
   console.log(`📄 RAG endpoint: http://localhost:${config.server.port}/api/rag`);
   console.log(`🌍 Environment: ${config.server.nodeEnv}`);
 });

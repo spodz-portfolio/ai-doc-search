@@ -1,22 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { IChatService, IRagService } from '../types/interfaces';
+import { IRagService } from '../types/interfaces';
 
-export const useConnection = (chatService: IChatService, ragService: IRagService) => {
+export const useConnection = (ragService: IRagService) => {
   const [isConnected, setIsConnected] = useState<boolean | null>(null);
   const [ragStatus, setRagStatus] = useState<any>(null);
 
   const checkConnection = useCallback(async () => {
     try {
-      await chatService.healthCheck();
+      // Simple connection check - try to get RAG status
+      const response = await ragService.getStatus();
       setIsConnected(true);
     } catch (error) {
+      console.warn('Connection check failed:', error);
       setIsConnected(false);
-      
-      // Retry connection after 3 seconds
-      setTimeout(checkConnection, 3000);
     }
-  }, [chatService]);
-
+  }, [ragService]);
+   
   const checkRagStatus = useCallback(async () => {
     try {
       const response = await ragService.getStatus();

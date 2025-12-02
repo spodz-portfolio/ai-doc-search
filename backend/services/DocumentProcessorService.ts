@@ -15,6 +15,7 @@ interface DocumentChunk {
   id: string;
   text: string;
   content: string;
+  documentId: string;
   metadata: {
     documentId: string;
     documentTitle: string;
@@ -43,8 +44,41 @@ export class DocumentProcessorService extends BaseService {
 
   constructor(ragRepository?: RagRepository) {
     super(ragRepository);
-    this.defaultChunkSize = 1000;
-    this.defaultOverlap = 200;
+    this.defaultChunkSize = 400; // Reduced from 1000 for better granularity
+    this.defaultOverlap = 100; // Reduced proportionally
+  }
+
+  /**
+   * Calculate optimal chunk size based on document characteristics
+   */
+  private calculateOptimalChunkSize(document: Document): { chunkSize: number; overlap: number } {
+    const contentLength = document.content.length;
+    const wordCount = document.content.split(/\s+/).length;
+    const avgWordsPerChunk = 150; // Target words per chunk
+    
+    let chunkSize = this.defaultChunkSize;
+    let overlap = this.defaultOverlap;
+
+    // Adjust based on document size
+    if (contentLength > 50000) { // Large document
+      chunkSize = 600; // Larger chunks for large documents
+      overlap = 120;
+    } else if (contentLength < 2000) { // Small document
+      chunkSize = Math.max(200, Math.floor(contentLength / 3)); // Smaller chunks
+      overlap = Math.floor(chunkSize * 0.2);
+    }
+
+    // Adjust based on content density (words per character)
+    const density = wordCount / contentLength;
+    if (density > 0.15) { // Dense text (academic papers, legal docs)
+      chunkSize = Math.floor(chunkSize * 0.8); // Smaller chunks for dense text
+    } else if (density < 0.1) { // Sparse text (tables, code)
+      chunkSize = Math.floor(chunkSize * 1.2); // Larger chunks for sparse text
+    }
+
+    console.log(`📊 Optimal chunking for "${document.title}": size=${chunkSize}, overlap=${overlap} (content=${contentLength}chars, density=${density.toFixed(3)})`);
+    
+    return { chunkSize, overlap };
   }
 
   /**
@@ -53,11 +87,16 @@ export class DocumentProcessorService extends BaseService {
   splitTextIntoChunks(text: string, chunkSize: number = this.defaultChunkSize, overlap: number = this.defaultOverlap): string[] {
     try {
       if (!text || text.trim().length === 0) {
+        console.log('⚠️ Empty or null text provided for chunking');
         return [];
       }
 
+      console.log(`📝 Chunking text: ${text.length} characters, target chunk size: ${chunkSize}, overlap: ${overlap}`);
+
       const chunks: string[] = [];
       const sentences = this.splitIntoSentences(text);
+      
+      console.log(`📄 Split into ${sentences.length} sentences`);
       
       let currentChunk = '';
       let currentSize = 0;
@@ -84,6 +123,7 @@ export class DocumentProcessorService extends BaseService {
         chunks.push(currentChunk.trim());
       }
 
+      console.log(`✅ Created ${chunks.length} chunks with sizes: ${chunks.map(c => c.length).join(', ')}`);
       return chunks;
     } catch (error) {
       this.handleError(error as Error, 'Text chunking');
@@ -132,12 +172,20 @@ export class DocumentProcessorService extends BaseService {
     try {
       this.validateInput({ document }, ['document']);
 
-      const chunks = this.splitTextIntoChunks(document.content, chunkSize, overlap);
+      console.log(`📄 Processing document: "${document.title || document.fileName || 'Untitled'}" (${document.content.length} chars)`);
+
+      // Use intelligent chunk size optimization instead of simple adaptive sizing
+      const { chunkSize: optimalChunkSize, overlap: optimalOverlap } = this.calculateOptimalChunkSize(document);
+      const adaptiveChunkSize = optimalChunkSize;
+      const adaptiveOverlap = optimalOverlap;
+
+      const chunks = this.splitTextIntoChunks(document.content, adaptiveChunkSize, adaptiveOverlap);
       
       const processedChunks: DocumentChunk[] = chunks.map((chunk, index) => ({
         id: uuidv4(),
         text: chunk,
         content: chunk, // Keep both for compatibility
+        documentId: document.id, // Add documentId at the top level
         metadata: {
           documentId: document.id,
           documentTitle: document.title || document.fileName || 'Untitled',
@@ -164,7 +212,7 @@ export class DocumentProcessorService extends BaseService {
   }
 
   /**
-   * Process multiple documents into chunks
+   * Process multiple documents into chunks with parallel processing
    */
   async processDocuments(documents: Document[], chunkSize: number = this.defaultChunkSize, overlap: number = this.defaultOverlap): Promise<DocumentChunk[]> {
     try {
@@ -174,22 +222,63 @@ export class DocumentProcessorService extends BaseService {
         throw new Error('Documents must be an array');
       }
 
-      const allChunks: DocumentChunk[] = [];
+      console.log(`📝 Starting parallel processing of ${documents.length} documents...`);
+      const startTime = Date.now();
 
-      for (const document of documents) {
-        try {
-          const docChunks = await this.processDocument(document, chunkSize, overlap);
-          allChunks.push(...docChunks);
-        } catch (error) {
-          console.error(`Error processing document ${document.id || document.title}:`, error);
-        }
-      }
+      // Process documents in parallel with controlled concurrency (max 4 at once)
+      const allChunks = await this.processDocumentsWithConcurrency(documents, chunkSize, overlap, 4);
 
-      console.log(`📝 Processed ${documents.length} documents into ${allChunks.length} chunks`);
+      const processingTime = Date.now() - startTime;
+      console.log(`✅ Processed ${documents.length} documents into ${allChunks.length} chunks in ${processingTime}ms`);
+      console.log(`⚡ Average: ${Math.round(processingTime / documents.length)}ms per document, ${Math.round(allChunks.length / documents.length)} chunks per document`);
+
       return allChunks;
     } catch (error) {
       this.handleError(error as Error, 'Multiple documents processing');
     }
+  }
+
+  /**
+   * Process documents with controlled concurrency
+   */
+  private async processDocumentsWithConcurrency(
+    documents: Document[], 
+    chunkSize: number, 
+    overlap: number, 
+    concurrency: number
+  ): Promise<DocumentChunk[]> {
+    const results: DocumentChunk[] = [];
+    const errors: string[] = [];
+
+    // Process documents in batches
+    for (let i = 0; i < documents.length; i += concurrency) {
+      const batch = documents.slice(i, i + concurrency);
+      console.log(`� Processing document batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(documents.length / concurrency)}`);
+
+      const batchPromises = batch.map(async (document) => {
+        try {
+          const startTime = Date.now();
+          const chunks = await this.processDocument(document, chunkSize, overlap);
+          const processingTime = Date.now() - startTime;
+          console.log(`✅ Document "${document.title || 'Untitled'}" -> ${chunks.length} chunks (${processingTime}ms)`);
+          return chunks;
+        } catch (error) {
+          const errorMsg = `Error processing document ${document.id || document.title}: ${(error as Error).message}`;
+          console.error(`❌ ${errorMsg}`);
+          errors.push(errorMsg);
+          return [];
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      batchResults.forEach(chunks => results.push(...chunks));
+    }
+
+    if (errors.length > 0) {
+      console.warn(`⚠️ ${errors.length} documents failed to process:`, errors);
+    }
+
+    return results;
   }
 
   /**

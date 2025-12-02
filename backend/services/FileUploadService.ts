@@ -2,6 +2,9 @@ import { BaseService } from '../utils/BaseService.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import pdfParse from 'pdf-parse';
+// @ts-ignore - mammoth doesn't have complete type definitions
+import mammoth from 'mammoth';
 import type { RagRepository } from '../repositories/RagRepository.js';
 
 interface UploadedFile {
@@ -117,7 +120,7 @@ export class FileUploadService extends BaseService {
       const extension = path.extname(file.originalname).toLowerCase();
       let extractedText = '';
       
-      // Basic text extraction - simplified for TypeScript conversion
+      // Enhanced text extraction with PDF and DOCX support
       if (extension === '.txt' || extension === '.md') {
         extractedText = await fs.readFile(file.path, 'utf-8');
       } else if (extension === '.json') {
@@ -128,11 +131,63 @@ export class FileUploadService extends BaseService {
         } catch {
           extractedText = jsonContent;
         }
+      } else if (extension === '.pdf') {
+        try {
+          console.log(`📄 Extracting text from PDF: ${file.originalname} (${file.size} bytes)`);
+          const startTime = Date.now();
+          
+          // For large PDFs, use optimized parsing
+          const pdfBuffer = await fs.readFile(file.path);
+          const pdfData = await pdfParse(pdfBuffer, {
+            // Optimize PDF parsing performance
+            max: 0 // No page limit
+          });
+          
+          extractedText = pdfData.text;
+          const processingTime = Date.now() - startTime;
+          
+          console.log(`✅ PDF text extracted: ${extractedText.length} characters in ${processingTime}ms`);
+          console.log(`📊 PDF stats: ${pdfData.numpages} pages, ${Math.round(extractedText.length / pdfData.numpages)} chars/page avg`);
+          
+          // Force garbage collection for large PDFs
+          if (file.size > 5 * 1024 * 1024 && global.gc) { // > 5MB
+            global.gc();
+            console.log(`🗑️ Triggered garbage collection for large PDF`);
+          }
+        } catch (error) {
+          console.error(`❌ Error extracting PDF text from ${file.originalname}:`, error);
+          extractedText = `[Error extracting PDF content: ${(error as Error).message}]`;
+        }
+      } else if (extension === '.docx') {
+        try {
+          console.log(`📄 Extracting text from DOCX: ${file.originalname}`);
+          const docxBuffer = await fs.readFile(file.path);
+          const result = await mammoth.extractRawText({ buffer: docxBuffer });
+          extractedText = result.value;
+          console.log(`✅ DOCX text extracted: ${extractedText.length} characters`);
+          
+          if (result.messages.length > 0) {
+            console.warn('DOCX extraction warnings:', result.messages);
+          }
+        } catch (error) {
+          console.error(`❌ Error extracting DOCX text from ${file.originalname}:`, error);
+          extractedText = `[Error extracting DOCX content: ${(error as Error).message}]`;
+        }
+      } else if (extension === '.doc') {
+        // Legacy DOC files are harder to parse, provide helpful message
+        extractedText = `[Legacy DOC files are not supported. Please convert to DOCX format for better text extraction]`;
+        console.warn(`⚠️ Legacy DOC file not supported: ${file.originalname}`);
       } else {
-        // For PDF, DOCX, etc. - placeholder for now
-        extractedText = `[${extension.toUpperCase()} file content extraction not yet implemented in TypeScript version]`;
-        console.warn(`⚠️ Text extraction for ${extension} files not yet implemented`);
+        // Unsupported file type
+        extractedText = `[${extension.toUpperCase()} file content extraction not supported]`;
+        console.warn(`⚠️ Text extraction for ${extension} files not supported`);
       }
+
+      // Log extraction results
+      console.log(`📊 File processing summary for "${file.originalname}":`);
+      console.log(`   📏 Original file size: ${file.size} bytes`);
+      console.log(`   📝 Extracted text length: ${extractedText.length} characters`);
+      console.log(`   🔤 Text preview: ${extractedText.substring(0, 100)}${extractedText.length > 100 ? '...' : ''}`);
 
       const processedDoc: ProcessedDocument = {
         id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -146,7 +201,8 @@ export class FileUploadService extends BaseService {
           uploadedAt: new Date().toISOString(),
           originalName: file.originalname,
           extension,
-          encoding: file.encoding
+          encoding: file.encoding,
+          extractedTextLength: extractedText.length
         }
       };
 
@@ -168,7 +224,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * Process multiple uploaded files
+   * Process multiple uploaded files with controlled concurrency
    */
   async processUploadedFiles(files: UploadedFile[]): Promise<ProcessedDocument[]> {
     try {
@@ -178,22 +234,58 @@ export class FileUploadService extends BaseService {
         throw new Error('Files must be an array');
       }
 
-      const processedDocs: ProcessedDocument[] = [];
+      console.log(`📤 Starting parallel processing of ${files.length} files...`);
+      const startTime = Date.now();
 
-      for (const file of files) {
-        try {
-          const processedDoc = await this.processUploadedFile(file);
-          processedDocs.push(processedDoc);
-        } catch (error) {
-          console.error(`Error processing file ${file.originalname}:`, error);
-        }
-      }
+      // Process files in parallel with controlled concurrency (max 3 at once)
+      const processedDocs = await this.processFilesWithConcurrency(files, 3);
 
-      console.log(`📄 Processed ${processedDocs.length}/${files.length} uploaded files`);
+      const processingTime = Date.now() - startTime;
+      console.log(`✅ Processed ${processedDocs.length}/${files.length} files in ${processingTime}ms`);
+      console.log(`⚡ Average processing time: ${Math.round(processingTime / files.length)}ms per file`);
+
       return processedDocs;
     } catch (error) {
       this.handleError(error as Error, 'Processing multiple uploaded files');
     }
+  }
+
+  /**
+   * Process files with controlled concurrency to avoid overwhelming the system
+   */
+  private async processFilesWithConcurrency(files: UploadedFile[], concurrency: number): Promise<ProcessedDocument[]> {
+    const results: ProcessedDocument[] = [];
+    const errors: string[] = [];
+
+    // Process files in batches
+    for (let i = 0; i < files.length; i += concurrency) {
+      const batch = files.slice(i, i + concurrency);
+      console.log(`� Processing batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(files.length / concurrency)} (${batch.length} files)`);
+
+      const batchPromises = batch.map(async (file) => {
+        try {
+          const startTime = Date.now();
+          const result = await this.processUploadedFile(file);
+          const processingTime = Date.now() - startTime;
+          console.log(`✅ Processed "${file.originalname}" in ${processingTime}ms`);
+          return result;
+        } catch (error) {
+          const errorMsg = `Error processing ${file.originalname}: ${(error as Error).message}`;
+          console.error(`❌ ${errorMsg}`);
+          errors.push(errorMsg);
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults.filter(result => result !== null) as ProcessedDocument[]);
+    }
+
+    if (errors.length > 0) {
+      console.warn(`⚠️ ${errors.length} files failed to process:`, errors);
+    }
+
+    return results;
   }
 
   /**

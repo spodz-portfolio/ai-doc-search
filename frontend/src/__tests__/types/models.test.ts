@@ -1,4 +1,4 @@
-import { Message, RagMessage, ChatOptions } from '../../types/models';
+import { Message, RagMessage } from '../../types/models';
 
 describe('Message Model', () => {
   describe('constructor', () => {
@@ -182,66 +182,3 @@ describe('RagMessage Model', () => {
   });
 });
 
-describe('ChatOptions Model', () => {
-  describe('constructor', () => {
-    it('should create options with default values', () => {
-      const options = new ChatOptions();
-      
-      expect(options.enableStreaming).toBe(true);
-      expect(options.maxTokens).toBe(1000);
-      expect(options.temperature).toBe(0.7);
-      expect(options.searchMode).toBe('openai');
-      expect(options.systemPrompt).toBeUndefined();
-    });
-
-    it('should create options with custom values', () => {
-      const options = new ChatOptions(false, 500, 0.5, 'rag', 'Custom prompt');
-      
-      expect(options.enableStreaming).toBe(false);
-      expect(options.maxTokens).toBe(500);
-      expect(options.temperature).toBe(0.5);
-      expect(options.searchMode).toBe('rag');
-      expect(options.systemPrompt).toBe('Custom prompt');
-    });
-  });
-
-  describe('static default', () => {
-    it('should create default options', () => {
-      const options = ChatOptions.default();
-      
-      expect(options.enableStreaming).toBe(true);
-      expect(options.maxTokens).toBe(1000);
-      expect(options.temperature).toBe(0.7);
-      expect(options.searchMode).toBe('openai');
-    });
-  });
-
-  describe('instance methods', () => {
-    let options: ChatOptions;
-
-    beforeEach(() => {
-      options = new ChatOptions();
-    });
-
-    it('should identify RAG mode correctly', () => {
-      expect(options.isRagMode()).toBe(false);
-      
-      options.searchMode = 'rag';
-      expect(options.isRagMode()).toBe(true);
-    });
-
-    it('should determine streaming availability correctly', () => {
-      // OpenAI mode with streaming enabled
-      expect(options.isStreamingEnabled()).toBe(true);
-      
-      // OpenAI mode with streaming disabled
-      options.enableStreaming = false;
-      expect(options.isStreamingEnabled()).toBe(false);
-      
-      // RAG mode (streaming always disabled regardless of setting)
-      options.enableStreaming = true;
-      options.searchMode = 'rag';
-      expect(options.isStreamingEnabled()).toBe(false);
-    });
-  });
-});

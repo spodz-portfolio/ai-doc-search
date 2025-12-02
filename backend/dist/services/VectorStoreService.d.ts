@@ -22,6 +22,7 @@ interface SearchFilters {
     documentId?: string;
     documentTitle?: string;
     minChunkSize?: number;
+    category?: string;
 }
 interface VectorStoreStats {
     totalChunks: number | string;

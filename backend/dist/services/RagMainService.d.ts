@@ -10,6 +10,7 @@ interface QueryOptions {
     minSimilarity?: number;
     includeContext?: boolean;
     maxContextLength?: number;
+    category?: string;
 }
 interface RagResult {
     success: boolean;
